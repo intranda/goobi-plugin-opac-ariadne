@@ -133,11 +133,14 @@ public class AriadneImport implements IOpacPlugin {
             DocStruct recordDocStruct = digDoc.createDocStruct(prefs.getDocStrctTypeByName("Record"));
             volumeRun.addChild(recordDocStruct);
             addMetadata(recordDocStruct, "CatalogIDDigital", c.getAttributeValue("id"));
+            addMetadata(recordDocStruct, "CatalogIDSource", c.getAttributeValue("id"));
             for (Element element : did.getChildren()) {
-                if (element.getName().equals("unitid") && element.getAttribute("type") == null) {
+                if (element.getName().equals("unitid") && (element.getAttribute("type") == null || element.getAttributeValue("type").equals(
+                        "Altsignatur"))) {
                     addMetadata(recordDocStruct, "shelfmarksource", element.getValue());
                 } else if (element.getName().equals("unittitle")) {
                     addMetadata(recordDocStruct, "TitleDocMain", element.getValue());
+                    addMetadata(recordDocStruct, "TitleDocMainShort", element.getValue());
                 } else if (element.getName().equals("unitdate")) {
                     addMetadata(recordDocStruct, "Dating", element.getAttributeValue("normal"));
                     addMetadata(recordDocStruct, "Period", element.getValue());
@@ -163,32 +166,41 @@ public class AriadneImport implements IOpacPlugin {
                 String collectionName = "Archive#100 UAG-HGW#" + tektonik + "#" + upperDid.getChildText("unittitle");
                 addMetadata(recordDocStruct, "singleDigCollection", collectionName);
                 addMetadata(volumeRun, "singleDigCollection", collectionName);
-            }
-            while (upperC.getAttributeValue("level").equals("class")) {
-                String currentId = upperC.getAttributeValue("id");
-                String currentTitle = upperC.getChild("did", oaiNamespace).getChildText("unittitle");
-                upperC = upperC.getParentElement();
-                addMetadata(volumeRun, "TitleDocSub1", currentTitle);
-                addMetadata(volumeRun, "Resource", currentId);
-            }
-
-            if (upperC.getAttributeValue("level").equals("collection")) {
-                Element anchorMetadata = upperC.getChild("did", oaiNamespace);
-                for (Element element : anchorMetadata.getChildren()) {
-                    if (element.getName().equals("unitid")) {
-                        addMetadata(volumeRun, "CatalogIDDigital", element.getValue().replaceAll("\\W", ""));
-                        addMetadata(volumeRun, "Resource", element.getValue());
-                    } else if (element.getName().equals("unittitle")) {
-                        addMetadata(volumeRun, "TitleDocMain", element.getValue());
-                    } else if (element.getName().equals("unitdate")) {
-                        addMetadata(volumeRun, "Dating", element.getValue());
-                    } else if (element.getName().equals("origination") && element.getAttribute("label") == null) {
-                        addMetadata(volumeRun, "Contains", element.getValue());
-                    } else if (element.getName().equals("origination") && element.getAttribute("label") != null) {
-                        addMetadata(volumeRun, "ContainsToo", element.getValue());
-                    }
+                Element unittitle = upperDid.getChild("unittitle", oaiNamespace);
+                if (unittitle != null) {
+                    addMetadata(volumeRun, "TitleDocMain", unittitle.getValue());
                 }
+                addMetadata(volumeRun, "CatalogIDDigital", upperC.getAttributeValue("id").replaceAll("\\W", ""));
+                addMetadata(volumeRun, "CatalogIDSource", upperC.getAttributeValue("id").replaceAll("\\W", ""));
+
             }
+            //            while (upperC.getAttributeValue("level").equals("class")) {
+            //                String currentId = upperC.getAttributeValue("id");
+            //                String currentTitle = upperC.getChild("did", oaiNamespace).getChildText("unittitle");
+            //                upperC = upperC.getParentElement();
+            //                addMetadata(volumeRun, "TitleDocSub1", currentTitle);
+            //                addMetadata(volumeRun, "Resource", currentId);
+            //            }
+            //
+            //            if (upperC.getAttributeValue("level").equals("collection")) {
+            //                Element anchorMetadata = upperC.getChild("did", oaiNamespace);
+            //                for (Element element : anchorMetadata.getChildren()) {
+            //                    if (element.getName().equals("unitid")) {
+            //                        addMetadata(volumeRun, "CatalogIDDigital", element.getValue().replaceAll("\\W", ""));
+            //                        addMetadata(volumeRun, "CatalogIDSource", element.getValue().replaceAll("\\W", ""));
+            //                        addMetadata(volumeRun, "Resource", element.getValue());
+            //                    } else if (element.getName().equals("unittitle")) {
+            //                        addMetadata(volumeRun, "TitleDocMain", element.getValue());
+            //                        addMetadata(volumeRun, "TitleDocMainShort", element.getValue());
+            //                    } else if (element.getName().equals("unitdate")) {
+            //                        addMetadata(volumeRun, "Dating", element.getValue());
+            //                    } else if (element.getName().equals("origination") && element.getAttribute("label") == null) {
+            //                        addMetadata(volumeRun, "Contains", element.getValue());
+            //                    } else if (element.getName().equals("origination") && element.getAttribute("label") != null) {
+            //                        addMetadata(volumeRun, "ContainsToo", element.getValue());
+            //                    }
+            //                }
+            //            }
 
             Element location = xFactory.compile("//oai:archdesc/oai:did/oai:repository/oai:corpname", Filters.element(), null, oaiNamespace)
                     .evaluateFirst(eadRecord);
