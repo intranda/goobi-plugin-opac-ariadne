@@ -25,10 +25,16 @@ package de.intranda.goobi.plugins;
 
 import java.io.IOException;
 import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.List;
 
+import org.apache.commons.configuration.HierarchicalConfiguration;
+import org.apache.commons.configuration.XMLConfiguration;
+import org.apache.commons.configuration.tree.xpath.XPathExpressionEngine;
 import org.apache.commons.lang.StringUtils;
 import org.goobi.production.enums.PluginType;
 import org.goobi.production.plugin.interfaces.IOpacPlugin;
+import org.jdom2.Attribute;
 import org.jdom2.Document;
 import org.jdom2.Element;
 import org.jdom2.JDOMException;
@@ -38,13 +44,14 @@ import org.jdom2.input.SAXBuilder;
 import org.jdom2.input.sax.XMLReaders;
 import org.jdom2.xpath.XPathFactory;
 
+import de.sub.goobi.config.ConfigPlugins;
 import de.sub.goobi.helper.HttpClientHelper;
 import de.unigoettingen.sub.search.opac.ConfigOpac;
 import de.unigoettingen.sub.search.opac.ConfigOpacCatalogue;
 import de.unigoettingen.sub.search.opac.ConfigOpacDoctype;
 import lombok.Getter;
 import lombok.Setter;
-import lombok.extern.log4j.Log4j;
+import lombok.extern.log4j.Log4j2;
 import net.xeoh.plugins.base.annotations.PluginImplementation;
 import ugh.dl.DigitalDocument;
 import ugh.dl.DocStruct;
@@ -57,7 +64,7 @@ import ugh.exceptions.UGHException;
 import ugh.fileformats.mets.MetsMods;
 
 @PluginImplementation
-@Log4j
+@Log4j2
 
 public class AriadneImport implements IOpacPlugin {
 
@@ -77,27 +84,22 @@ public class AriadneImport implements IOpacPlugin {
 
     private Namespace oaiNamespace = Namespace.getNamespace("oai", "http://www.openarchives.org/OAI/2.0/");
 
-    public static void main(String[] args) {
-        AriadneImport ai = new AriadneImport();
-        Prefs prefs = new Prefs();
-        try {
-            prefs.loadPrefs("/home/robert/greifswald.xml");
-            ai.search("", "obj-5164280", null, prefs);
-        } catch (Exception e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-    }
+    private String ariadneUrl;
+    private ConfigOpacDoctype docType;
+    private List<MetadataField> metadataList;
+    private String collectionPrefix;
+    private boolean generateCollection;
 
     public AriadneImport() {
     }
 
     @Override
     public Fileformat search(String inSuchfeld, String inSuchbegriff, ConfigOpacCatalogue coc, Prefs inPrefs) throws Exception {
+
+        readConfiguration();
+
         prefs = inPrefs;
-        String url =
-                "https://ariadne-portal.uni-greifswald.de/?page_id=463&verb=GetRecord&metadataPrefix=goobi_ead&identifier=ariadne-portal.uni-greifswald.de:"
-                        + inSuchbegriff;
+        String url = ariadneUrl + inSuchbegriff;
         String response = HttpClientHelper.getStringFromUrl(url);
         if (StringUtils.isNotBlank(response)) {
             Element eadRecord = getRecordFromResponse(response);
@@ -116,6 +118,38 @@ public class AriadneImport implements IOpacPlugin {
         return null;
     }
 
+    private void readConfiguration() {
+
+        metadataList = new ArrayList<>();
+        XMLConfiguration xmlConfig = ConfigPlugins.getPluginConfig("intranda_opac_ariadne");
+        xmlConfig.setExpressionEngine(new XPathExpressionEngine());
+        ariadneUrl = xmlConfig.getString("/ariadneUrl");
+
+        collectionPrefix = xmlConfig.getString("/collection/@prefix");
+        generateCollection = xmlConfig.getBoolean("/collection/@generate", false);
+
+        String type = xmlConfig.getString("/doctype");
+
+        ConfigOpac co = ConfigOpac.getInstance();
+        docType = co.getDoctypeByName(type);
+        if (docType == null) {
+            docType = co.getAllDoctypes().get(0);
+        }
+
+        List<HierarchicalConfiguration> metadataDefinitionList = xmlConfig.configurationsAt("/metadatalist/metadata");
+        for (HierarchicalConfiguration metadataDefinition : metadataDefinitionList) {
+            MetadataField mf = new MetadataField();
+            mf.setRulesetName(metadataDefinition.getString("./@ruleset"));
+            mf.setXpath(metadataDefinition.getString("./@xpath"));
+            mf.setElementName(metadataDefinition.getString("./@element", "c"));
+            mf.setDoctype(metadataDefinition.getString("./@doctype", "logical"));
+            mf.setXpathType(metadataDefinition.getString("./@xpathType", "element"));
+            mf.setRegex(metadataDefinition.getString("./@replace", null));
+            metadataList.add(mf);
+        }
+
+    }
+
     private Fileformat getFileformatFromEadRecord(Element eadRecord) {
 
         Element tektonikName = xFactory.compile("//oai:eadheader/oai:filedesc/oai:titlestmt/oai:titleproper", Filters.element(), null, oaiNamespace)
@@ -123,88 +157,66 @@ public class AriadneImport implements IOpacPlugin {
         String tektonik = tektonikName.getValue();
         Element c = xFactory.compile("//oai:c[not(oai:c)]", Filters.element(), null, oaiNamespace).evaluateFirst(eadRecord);
         Element did = c.getChild("did", oaiNamespace);
+
+        Element upperC = c.getParentElement();
+        Element upperDid = upperC.getChild("did", oaiNamespace);
+
         Fileformat mm = null;
         try {
             mm = new MetsMods(prefs);
             DigitalDocument digDoc = new DigitalDocument();
             mm.setDigitalDocument(digDoc);
-            DocStruct volumeRun = digDoc.createDocStruct(prefs.getDocStrctTypeByName("VolumeRun"));
-            digDoc.setLogicalDocStruct(volumeRun);
-            DocStruct recordDocStruct = digDoc.createDocStruct(prefs.getDocStrctTypeByName("Record"));
-            volumeRun.addChild(recordDocStruct);
-            addMetadata(recordDocStruct, "CatalogIDDigital", c.getAttributeValue("id"));
-            addMetadata(recordDocStruct, "CatalogIDSource", c.getAttributeValue("id"));
-            for (Element element : did.getChildren()) {
-                if (element.getName().equals("unitid") && (element.getAttribute("type") == null || element.getAttributeValue("type").equals(
-                        "Altsignatur"))) {
-                    addMetadata(recordDocStruct, "shelfmarksource", element.getValue());
-                } else if (element.getName().equals("unittitle")) {
-                    addMetadata(recordDocStruct, "TitleDocMain", element.getValue());
-                    addMetadata(recordDocStruct, "TitleDocMainShort", element.getValue());
-                } else if (element.getName().equals("unitdate")) {
-                    addMetadata(recordDocStruct, "Dating", element.getAttributeValue("normal"));
-                    addMetadata(recordDocStruct, "Period", element.getValue());
-                } else if (element.getName().equals("abstract")) {
-                    addMetadata(recordDocStruct, "Contains", element.getValue());
-                } else if (element.getName().equals("unitid") && element.getAttributeValue("type") == "Sortierung") {
-                    addMetadata(recordDocStruct, "CurrentNo", element.getValue());
-                    addMetadata(recordDocStruct, "CurrentNoSorting", element.getValue());
-                } else if (element.getName().equals("accessrestrict")) {
-                    addMetadata(recordDocStruct, "AccessLicense", element.getChild("p", oaiNamespace).getChild("a", oaiNamespace).getValue());
+            DocStruct anchor = null;
+            DocStruct logical = null;
+            if (StringUtils.isNotBlank(docType.getRulesetChildType())) {
+                anchor = digDoc.createDocStruct(prefs.getDocStrctTypeByName(docType.getRulesetType()));
+                digDoc.setLogicalDocStruct(anchor);
+                logical = digDoc.createDocStruct(prefs.getDocStrctTypeByName(docType.getRulesetChildType()));
+                anchor.addChild(logical);
+            } else {
+                logical = digDoc.createDocStruct(prefs.getDocStrctTypeByName(docType.getRulesetType()));
+            }
+            for (MetadataField mf : metadataList) {
+                String value = null;
+
+                switch (mf.getElementName()) {
+                    case "c":
+                        value = compile(mf, c);
+                        break;
+                    case "did":
+                        value = compile(mf, did);
+                        break;
+                    case "parentC":
+                        value = compile(mf, upperC);
+                        break;
+                    case "parentDid":
+                        value = compile(mf, upperDid);
+                        break;
+                    case "record":
+                        value = compile(mf, eadRecord);
+                        break;
+                    default:
+                        log.warn(mf.getElementName() + " is unknown");
+                }
+                if (value != null) {
+
+                    if (StringUtils.isNotBlank(mf.getRegex())) {
+                        value = value.replaceAll(mf.getRegex(), "");
+                    }
+                    if (mf.getDoctype().equals("anchor")) {
+                        addMetadata(anchor, mf.getRulesetName(), value);
+                    } else {
+                        addMetadata(logical, mf.getRulesetName(), value);
+                    }
                 }
             }
-            //            <unitid type="Altsignatur">Ia 2</unitid>
-            //            <physdesc>
-            //            <genreform normal="Akten">Sachakten</genreform>
-            //            </physdesc>
 
-            // TODO singleDigCollection Archive#100 UAG-HGW# + Tektonik + parent c  #07.02. - Vorlesungen, Index, Fleisslisten
-
-            Element upperC = c.getParentElement();
-            Element upperDid = upperC.getChild("did", oaiNamespace);
-            if (upperDid != null) {
-                String collectionName = "Archive#100 UAG-HGW#" + tektonik + "#" + upperDid.getChildText("unittitle");
-                addMetadata(recordDocStruct, "singleDigCollection", collectionName);
-                addMetadata(volumeRun, "singleDigCollection", collectionName);
-                Element unittitle = upperDid.getChild("unittitle", oaiNamespace);
-                if (unittitle != null) {
-                    addMetadata(volumeRun, "TitleDocMain", unittitle.getValue());
-                }
-                addMetadata(volumeRun, "CatalogIDDigital", upperC.getAttributeValue("id").replaceAll("\\W", ""));
-                addMetadata(volumeRun, "CatalogIDSource", upperC.getAttributeValue("id").replaceAll("\\W", ""));
-
+            if (generateCollection) {
+                String collectionName = collectionPrefix + tektonik + "#" + upperDid.getChildText("unittitle");
+                addMetadata(logical, "singleDigCollection", collectionName);
+                addMetadata(anchor, "singleDigCollection", collectionName);
             }
-            //            while (upperC.getAttributeValue("level").equals("class")) {
-            //                String currentId = upperC.getAttributeValue("id");
-            //                String currentTitle = upperC.getChild("did", oaiNamespace).getChildText("unittitle");
-            //                upperC = upperC.getParentElement();
-            //                addMetadata(volumeRun, "TitleDocSub1", currentTitle);
-            //                addMetadata(volumeRun, "Resource", currentId);
-            //            }
-            //
-            //            if (upperC.getAttributeValue("level").equals("collection")) {
-            //                Element anchorMetadata = upperC.getChild("did", oaiNamespace);
-            //                for (Element element : anchorMetadata.getChildren()) {
-            //                    if (element.getName().equals("unitid")) {
-            //                        addMetadata(volumeRun, "CatalogIDDigital", element.getValue().replaceAll("\\W", ""));
-            //                        addMetadata(volumeRun, "CatalogIDSource", element.getValue().replaceAll("\\W", ""));
-            //                        addMetadata(volumeRun, "Resource", element.getValue());
-            //                    } else if (element.getName().equals("unittitle")) {
-            //                        addMetadata(volumeRun, "TitleDocMain", element.getValue());
-            //                        addMetadata(volumeRun, "TitleDocMainShort", element.getValue());
-            //                    } else if (element.getName().equals("unitdate")) {
-            //                        addMetadata(volumeRun, "Dating", element.getValue());
-            //                    } else if (element.getName().equals("origination") && element.getAttribute("label") == null) {
-            //                        addMetadata(volumeRun, "Contains", element.getValue());
-            //                    } else if (element.getName().equals("origination") && element.getAttribute("label") != null) {
-            //                        addMetadata(volumeRun, "ContainsToo", element.getValue());
-            //                    }
-            //                }
-            //            }
 
-            Element location = xFactory.compile("//oai:archdesc/oai:did/oai:repository/oai:corpname", Filters.element(), null, oaiNamespace)
-                    .evaluateFirst(eadRecord);
-            addMetadata(recordDocStruct, "PhysicalLocation", location != null ? location.getValue() : "Universitätsbibliothek Greifswald");
             DocStructType physicalType = prefs.getDocStrctTypeByName("BoundBook");
             DocStruct physical = digDoc.createDocStruct(physicalType);
             digDoc.setPhysicalDocStruct(physical);
@@ -215,63 +227,24 @@ public class AriadneImport implements IOpacPlugin {
             log.error(e);
         }
 
-        /*
-
-        <DocStrctType anchor="true">
-        <Name>VolumeRun</Name>
-        <language name="de">BandSerie</language>
-        <language name="en">VolumeRun</language>
-        <language name="es">Serie de volúmenes</language>
-        <allowedchildtype>Record</allowedchildtype>
-        <allowedchildtype>Volume</allowedchildtype>
-        <metadata num="1o">CatalogIDSource</metadata>
-        <metadata num="*">TitleDocSub1</metadata>
-        <metadata num="1o">CatalogIDDigital</metadata>
-        <metadata num="*" DefaultDisplay="true">singleDigCollection</metadata>
-        <metadata num="*">Creator</metadata>
-        <metadata num="1o">Contains</metadata>
-        <metadata num="*">ContainsToo</metadata>
-        <metadata num="*">_urn</metadata>
-        <metadata num="+" DefaultDisplay="true">TitleDocMain</metadata>
-        <metadata num="*" DefaultDisplay="true">AccessLicense</metadata>
-        <metadata num="*" DefaultDisplay="true">Resource</metadata>
-        <metadata num="*">_ucc_id</metadata>
-        <metadata num="*">OtherOldPrints</metadata>
-        <metadata num="*">Dedicatee</metadata>
-        <metadata num="*">Contributor</metadata>
-        <metadata num="1o" DefaultDisplay="true">PublicationStart</metadata>
-        <metadata num="1o" DefaultDisplay="true">PublicationEnd</metadata>
-        <metadata num="*" DefaultDisplay="true">Dating</metadata>
-        <metadata num="1o">PublicationRun</metadata>
-        <metadata num="1o">PublicationYear</metadata>
-         */
-
-        /*
-
-        <DocStrctType topStruct="true">
-        <Name>Record</Name>
-        <metadata num="*">Creator</metadata>
-        <metadata num="*">ContainsToo</metadata>
-        <metadata num="*">TitleDocSub1</metadata>
-        <metadata num="1o" DefaultDisplay="true">CatalogIDSource</metadata>
-        <metadata num="*" DefaultDisplay="true">singleDigCollection</metadata>
-        <metadata num="*">_urn</metadata>
-        <metadata num="*">Dedicatee</metadata>
-        <metadata num="*">OtherOldPrints</metadata>
-        <metadata num="*">Contributor</metadata>
-        <metadata num="*" DefaultDisplay="true">Resource</metadata>
-        <metadata num="*">_ucc_id</metadata>
-        <metadata num="1o">copyrightimageset</metadata>
-        <metadata num="1o">FormatSourcePrint</metadata>
-        <metadata num="1o">SizeSourcePrint</metadata>
-        <metadata num="*" DefaultDisplay="true">DocLanguage</metadata>
-        <metadata num="*">PhysicalLocation</metadata>
-        <metadata num="*">Format</metadata>
-
-         */
-        // VolumeRun, Record
-
         return mm;
+    }
+
+    private String compile(MetadataField mf, Element element) {
+        String result = null;
+        if (mf.getXpathType().equals("attribute")) {
+            Attribute attr = xFactory.compile(mf.getXpath(), Filters.attribute(), null, oaiNamespace).evaluateFirst(element);
+            if (attr != null) {
+                result = attr.getValue();
+            }
+        } else {
+            Element el = xFactory.compile(mf.getXpath(), Filters.element(), null, oaiNamespace).evaluateFirst(element);
+            if (el != null) {
+                result = el.getValue();
+            }
+        }
+        // TODO Auto-generated method stub
+        return result;
     }
 
     private Element getRecordFromResponse(String response) {
@@ -300,28 +273,21 @@ public class AriadneImport implements IOpacPlugin {
 
     @Override
     public ConfigOpacDoctype getOpacDocType() {
-        ConfigOpac co = ConfigOpac.getInstance();
-        ConfigOpacDoctype cod = co.getDoctypeByName("volumerun");
-        if (cod == null) {
-            cod = co.getAllDoctypes().get(0);
-        }
-        return cod;
+        return docType;
     }
 
     @Override
     public String createAtstsl(String value, String value2) {
-        // TODO Auto-generated method stub
         return "";
     }
 
     @Override
     public String getGattung() {
-        // TODO Auto-generated method stub
-        return "VolumeRun";
+        return docType.getRulesetType();
     }
 
     private void addMetadata(DocStruct docStruct, String metadataName, String value) {
-        if (StringUtils.isNotBlank(value)) {
+        if (StringUtils.isNotBlank(value) && docStruct != null) {
             try {
                 Metadata metadata = new Metadata(prefs.getMetadataTypeByName(metadataName));
                 metadata.setValue(value);

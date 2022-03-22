@@ -1,0 +1,46 @@
+<config_plugin>
+
+<!-- url to the ariadne oai api -->
+<ariadneUrl>https://ariadne-portal.uni-greifswald.de/?page_id=463&amp;verb=GetRecord&amp;metadataPrefix=goobi_ead&amp;identifier=ariadne-portal.uni-greifswald.de:</ariadneUrl>
+
+    <!-- must match a title value in the doctype definition in goobi_opac.xml -->
+    <doctype>volumerun</doctype>
+
+    <collection generate="true" prefix="Archive#100 UAG-HGW#"/>
+    
+    <metadatalist>
+        <!-- 
+        ruleset: internal metadata name in prefs file
+        xpath: xpath expression to evaluate
+        element: element name to evaluate the xpath, possible values are c, did, parentC, parentDid, record
+        doctype: logical or anchor
+        xpathType: attribute or element (default)
+        replace: regular expression to manipulate results
+         -->
+    
+        <metadata ruleset="CatalogIDDigital" xpath="./@id" element="c" doctype="logical" xpathType="attribute"/>
+        <metadata ruleset="CatalogIDSource" xpath="./@id" element="c" doctype="logical" xpathType="attribute"/>
+        <metadata ruleset="TitleDocMain" xpath="./oai:unittitle" element="c" doctype="logical"/>
+        <metadata ruleset="TitleDocMainShort" xpath="./oai:unittitle" element="did" doctype="logical"/>
+        <metadata ruleset="shelfmarksource" xpath="./oai:unitid[@type='Altsignatur' or not(@type)]" element="did" doctype="logical"/>
+
+        <metadata ruleset="Dating" xpath="./oai:unitdate/@normal" element="did" doctype="logical" xpathType="attribute"/>
+        <metadata ruleset="Period" xpath="./oai:unitdate" element="did" doctype="logical"/>
+        <metadata ruleset="Contains" xpath="./oai:abstract" element="did" doctype="logical"/>
+        <metadata ruleset="CurrentNo" xpath="./oai:unitid[@type='Sortierung']" element="did" doctype="logical"/>
+        <metadata ruleset="CurrentNoSorting" xpath="./oai:unitid[@type='Sortierung']" element="did" doctype="logical"/>
+
+        <metadata ruleset="AccessLicense" xpath="./oai:accessrestrict/oai:p/oai:a" element="did" doctype="logical"/>
+
+        <metadata ruleset="TitleDocMain" xpath="./oai:unittitle" element="parentDid" doctype="anchor"/>
+
+        <metadata ruleset="CatalogIDDigital" xpath="./@id" element="parentC" doctype="anchor" xpathType="attribute" replace="\W"/>
+        <metadata ruleset="CatalogIDSource" xpath="./@id" element="parentC" doctype="anchor" xpathType="attribute" replace="\W"/>
+  
+        
+        <metadata ruleset="PhysicalLocation" xpath="//oai:archdesc/oai:did/oai:repository/oai:corpname" element="record" doctype="logical"/>
+
+        
+    </metadatalist>
+    
+</config_plugin>
