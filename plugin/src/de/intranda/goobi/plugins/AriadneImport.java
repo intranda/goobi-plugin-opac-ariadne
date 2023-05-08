@@ -45,10 +45,10 @@ import org.jdom2.input.sax.XMLReaders;
 import org.jdom2.xpath.XPathFactory;
 
 import de.sub.goobi.config.ConfigPlugins;
-import de.sub.goobi.helper.HttpClientHelper;
 import de.unigoettingen.sub.search.opac.ConfigOpac;
 import de.unigoettingen.sub.search.opac.ConfigOpacCatalogue;
 import de.unigoettingen.sub.search.opac.ConfigOpacDoctype;
+import io.goobi.workflow.api.connection.HttpUtils;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
@@ -100,7 +100,7 @@ public class AriadneImport implements IOpacPlugin {
 
         prefs = inPrefs;
         String url = ariadneUrl + inSuchbegriff;
-        String response = HttpClientHelper.getStringFromUrl(url);
+        String response = HttpUtils.getStringFromUrl(url);
         if (StringUtils.isNotBlank(response)) {
             Element eadRecord = getRecordFromResponse(response);
             if (eadRecord == null) {
@@ -203,7 +203,7 @@ public class AriadneImport implements IOpacPlugin {
                     if (StringUtils.isNotBlank(mf.getRegex())) {
                         value = value.replaceAll(mf.getRegex(), "");
                     }
-                    if (mf.getDoctype().equals("anchor")) {
+                    if ("anchor".equals(mf.getDoctype())) {
                         addMetadata(anchor, mf.getRulesetName(), value);
                     } else {
                         addMetadata(logical, mf.getRulesetName(), value);
@@ -232,7 +232,7 @@ public class AriadneImport implements IOpacPlugin {
 
     private String compile(MetadataField mf, Element element) {
         String result = null;
-        if (mf.getXpathType().equals("attribute")) {
+        if ("attribute".equals(mf.getXpathType())) {
             Attribute attr = xFactory.compile(mf.getXpath(), Filters.attribute(), null, oaiNamespace).evaluateFirst(element);
             if (attr != null) {
                 result = attr.getValue();
