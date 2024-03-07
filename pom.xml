@@ -7,7 +7,7 @@
     <relativePath />
   </parent>
   <groupId>io.goobi.workflow.plugin</groupId>
-  <artifactId>plugin-opac-ariadne-deps</artifactId>
+  <artifactId>plugin-opac-ariadne</artifactId>
   <packaging>pom</packaging>
   <modules>
     <module>module-base</module>
