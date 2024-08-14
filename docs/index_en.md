@@ -20,14 +20,13 @@ The files must be installed readable for the user `tomcat` at the following path
 
 ```bash
 /opt/digiverso/goobi/plugins/opac/plugin_intranda_opac_ariadne-base.jar
-/opt/digiverso/goobi/config/plugin_intranda_opac_ariadne.xml
+/opt/digiverso/goobi/plugins/config/plugin_intranda_opac_ariadne.xml
 ```
 
 
 ## Overview and functionality
 A normal OPAC query can now be carried out in Goobi. To do this, the catalogue `Ariadne` must be selected and the desired identifier entered. Please note that the identifier needs a prefix `obj-`, e.g. `obj-5602376`.
 
-![Selection of the plugin](screen1_en.png)
 
 ## Configuration
 In the file `goobi_opac.xml` the interface to the desired catalogue system must be made known. This is done by an entry that looks like this:

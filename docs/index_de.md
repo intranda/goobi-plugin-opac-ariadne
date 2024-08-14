@@ -20,14 +20,13 @@ Die Dateien müssen für den Nutzer `tomcat` lesbar an folgende Pfaden installie
 
 ```bash
 /opt/digiverso/goobi/plugins/opac/plugin_intranda_opac_ariadne-base.jar
-/opt/digiverso/goobi/config/plugin_intranda_opac_ariadne.xml
+/opt/digiverso/goobi/plugins/config/plugin_intranda_opac_ariadne.xml
 ```
 
 
 ## Überblick und Funktionsweise
 In Goobi kann nun eine normale OPAC Abfrage ausgeführt werden. Dazu muss der Katalog `Ariadne` ausgewählt werden und der gewünschte Identifier eingetragen werden. Zu beachten ist, dass der Identifier einen Präfix `obj-` benötigt, also z.B. `obj-5602376`.
 
-![Auswahl des Plugins](screen1_de.png)
 
 ## Konfiguration
 In der Datei `goobi_opac.xml` muss die Schnittstelle zum gewünschten Katalogsystem bekannt gemacht werden. Dies geschieht durch einen Eintrag, der wie folgt aussieht:
