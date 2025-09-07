@@ -3,6 +3,10 @@ title: Ariadne Import
 identifier: Ariadne
 published: true
 description: OPAC Plugin für die Datenübernahme aus Ariadne
+keywords:
+    - Goobi workflow
+    - Plugin
+    - Opac Plugin
 ---
 ## Einführung
 Die vorliegende Dokumentation beschreibt die Installation, Konfiguration und den Einsatz des Plugins. Mit Hilfe dieses Plugins können Daten aus dem Archivportal Mecklenburg-Vorpommern Ariadne abgefragt und in Goobi übernommen werden. Das Portal verfügt über eine OAI Schnittstelle, über die das Plugin die Daten in einem speziellen EAD-Goobi-Format bezieht.
