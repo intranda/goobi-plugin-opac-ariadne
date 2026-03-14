@@ -20,7 +20,7 @@ plugin_intranda_opac_ariadne-base.jar
 plugin_intranda_opac_ariadne.xml
 ```
 
-Die Dateien müssen für den Nutzer `tomcat` lesbar an folgende Pfaden installiert werden:
+Die Dateien müssen für den Nutzer `tomcat` lesbar an folgenden Pfaden installiert werden:
 
 ```bash
 /opt/digiverso/goobi/plugins/opac/plugin_intranda_opac_ariadne-base.jar
